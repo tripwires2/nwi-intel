@@ -4,10 +4,178 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NWI Local Intelligence</title>
-<!-- Full dashboard source will be uploaded; placeholder for now -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #0f1419; --panel: #1a2332; --border: #2d3a4f; --accent: #4da6ff; --green: #4ade80; --red: #f87171; --amber: #fbbf24; --text: #e6edf3; --muted: #8b9cb3; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hidden; }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #151d2b; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+.logo { display: flex; align-items: center; gap: 8px; }
+.logo-mark { width: 30px; height: 30px; background: var(--accent); color: #0f1419; border-radius: 6px; display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+.header h1 { font-size: 16px; font-weight: 600; }
+.sub { font-size: 11px; color: var(--muted); }
+.county-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.county-tab { padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--muted); font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: #1a2332; }
+.county-tab.active { background: var(--accent); color: #0f1419; border-color: var(--accent); }
+.status-bar { display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+.live-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+@keyframes pulse { 50% { opacity: 0.4; } }
+.main { display: grid; grid-template-columns: 240px 1fr 280px; height: calc(100vh - 52px); }
+.sidebar, .right { background: var(--panel); border-right: 1px solid var(--border); overflow-y: auto; padding: 12px; }
+.right { border-right: none; border-left: 1px solid var(--border); }
+.map-wrap { position: relative; background: #0d1117; }
+#map { width: 100%; height: 100%; }
+.hud { position: absolute; top: 8px; left: 8px; z-index: 1000; background: rgba(21,29,43,0.95); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 11px; max-width: 160px; max-height: 70vh; overflow-y: auto; }
+.hud .title { color: var(--accent); font-weight: 600; margin-bottom: 4px; font-size: 10px; }
+.hud label { display: flex; align-items: center; gap: 5px; margin: 4px 0; cursor: pointer; }
+.card { background: #243044; border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+.card h3 { font-size: 11px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+.metric { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; border-bottom: 1px solid #2d3a4f; }
+.metric:last-child { border: none; }
+.metric .val { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+.badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+.badge-g { background: #14532d; color: var(--green); }
+.badge-y { background: #713f12; color: var(--amber); }
+.ai-box { background: #1a2332; border-left: 3px solid var(--accent); padding: 8px; border-radius: 0 6px 6px 0; font-size: 12px; line-height: 1.4; }
+.export-btn { width: 100%; background: var(--accent); border: none; color: #0f1419; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: 6px; font-size: 13px; }
+.export-btn:hover { background: #6bb6ff; }
+.mobile-toggle { display: none; position: fixed; bottom: 12px; right: 12px; z-index: 2000; background: var(--accent); color: #0f1419; border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 20px; font-weight: 700; box-shadow: 0 4px 12px rgba(0,0,0,0.4); cursor: pointer; }
+@media (max-width: 900px) {
+  .main { grid-template-columns: 1fr; height: calc(100vh - 78px); }
+  .sidebar, .right { display: none; position: fixed; top: 78px; bottom: 0; width: 88%; max-width: 340px; z-index: 1500; border: 1px solid var(--border); padding: 12px; }
+  .sidebar.open, .right.open { display: block; }
+  .sidebar { left: 0; }
+  .right { right: 0; }
+  .mobile-toggle { display: grid; place-items: center; }
+  #mobileClearBtn { display: grid !important; place-items: center; }
+  .hud { max-width: 150px; font-size: 10px; max-height: 60vh; }
+  .header { padding: 6px 8px; flex-wrap: wrap; }
+  .county-tabs { order: 3; width: 100%; justify-content: center; margin-top: 4px; }
+}
+</style>
 </head>
 <body>
-<p>Loading NWI Intel...</p>
-<script>location.href='https://raw.githubusercontent.com/tripwires2/nwi-intel/main/index.html';</script>
+<div class="header">
+  <div class="logo"><div class="logo-mark">N</div><div><h1>NWI Intel</h1><div class="sub">Lake · Porter · LaPorte</div></div></div>
+  <div class="county-tabs" id="countyTabs">
+    <div class="county-tab active" data-county="lake">Lake</div>
+    <div class="county-tab" data-county="porter">Porter</div>
+    <div class="county-tab" data-county="laporte">LaPorte</div>
+  </div>
+  <div class="status-bar"><div class="live-dot"></div><span>LIVE</span><span id="clock">--:--</span></div>
+</div>
+<div class="main">
+  <div class="sidebar" id="sidebar">
+    <div class="card"><h3>STATUS</h3><div class="metric"><span>Posture</span><span class="badge badge-g" id="posture">STABLE</span></div><div class="metric"><span>Temp</span><span class="val" id="temp">--°F</span></div><div class="metric"><span>Conditions</span><span class="val" id="cond">Loading...</span></div><div class="metric"><span>NWS Alerts</span><span class="val" id="alertCount">0</span></div></div>
+    <div class="card"><h3>LIFELINES</h3><div class="metric"><span>Power</span><span class="badge badge-g">NOMINAL</span></div><div class="metric"><span>Water</span><span class="badge badge-g">NOMINAL</span></div><div class="metric"><span>Hospitals</span><span class="val">Multiple</span></div><div class="metric"><span>Fuel / Grocery</span><span class="val">Corridor nodes</span></div></div>
+    <div class="card"><h3>TOOLS</h3><button class="export-btn" onclick="exportAreaStudy()">Detailed Area Study</button><button class="export-btn" id="presetFlood" style="background:#1e3a5f;color:#e6edf3;margin-top:6px;">Flood Response</button><button class="export-btn" id="presetWeather" style="background:#1e3a5f;color:#e6edf3;margin-top:4px;">Severe Weather</button><button class="export-btn" id="presetDaily" style="background:#1e3a5f;color:#e6edf3;margin-top:4px;">Daily Awareness</button><button class="export-btn" id="clearMarkersBtn" style="background:#7f1d1d;color:#fff;margin-top:8px;">Clear Custom Markers</button></div>
+  </div>
+  <div class="map-wrap">
+    <div class="hud"><div class="title">EMERGENCY LAYERS</div>
+      <label><input type="checkbox" id="fenceToggle" checked> County Boundary</label>
+      <label><input type="checkbox" id="crimeToggle"> Crime Hotspots</label>
+      <label><input type="checkbox" id="floodToggle"> Flood Zones</label>
+      <label><input type="checkbox" id="hospitalsToggle"> Hospitals</label>
+      <label><input type="checkbox" id="fuelToggle"> Fuel / Grocery</label>
+      <label><input type="checkbox" id="emsToggle"> Fire / EMS</label>
+      <label><input type="checkbox" id="survivalToggle"> Survival Zones</label>
+      <label><input type="checkbox" id="routesToggle"> Evac Routes</label>
+      <label><input type="checkbox" id="ringsToggle"> Distance Rings</label>
+    </div>
+    <div id="map"></div>
+  </div>
+  <div class="right" id="rightPanel"><div class="card"><h3>ASSESSMENT</h3><div class="ai-box" id="aiBrief">Loading...</div></div><div class="card"><h3>ALERT HISTORY</h3><div id="alertHistory">No recent alerts.</div></div></div>
+</div>
+<button class="mobile-toggle" id="mobileToggle">☰</button>
+<button id="mobileClearBtn" style="display:none;position:fixed;bottom:12px;left:12px;z-index:2000;background:#7f1d1d;color:#fff;border:none;border-radius:50%;width:52px;height:52px;font-size:18px;cursor:pointer;">✕</button>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const counties = { lake: { name: "Lake County, IN", lat: 41.485, lng: -87.332, pop: "504k", nri: "Relatively High" }, porter: { name: "Porter County, IN", lat: 41.55, lng: -87.05, pop: "176k", nri: "Relatively Moderate" }, laporte: { name: "LaPorte County, IN", lat: 41.60, lng: -86.75, pop: "111k", nri: "Relatively Low" } };
+let map, countyLayer, currentCounty = "lake";
+const layers = {};
+function initMap() {
+  map = L.map('map', { zoomControl: false }).setView([41.485, -87.332], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '&copy; OpenStreetMap' }).addTo(map);
+  updateCountyLayer();
+  setupToggles();
+  setTimeout(() => map.invalidateSize(), 300);
+}
+function updateCountyLayer() {
+  if (countyLayer) map.removeLayer(countyLayer);
+  const c = counties[currentCounty];
+  const bounds = [[c.lat+0.14, c.lng-0.18],[c.lat+0.14, c.lng+0.18],[c.lat-0.14, c.lng+0.18],[c.lat-0.14, c.lng-0.18]];
+  countyLayer = L.polygon(bounds, { color: '#4da6ff', weight: 2, fillOpacity: 0.05, dashArray: '5,5' }).addTo(map).bindPopup(c.name);
+  map.setView([c.lat, c.lng], 10);
+}
+function makeLayer(points, color, radius=7) {
+  const g = L.layerGroup();
+  points.forEach(([lat,lng,label]) => L.circleMarker([lat,lng], { radius, fillColor: color, color: '#fff', weight: 1, fillOpacity: 0.9 }).bindPopup(label).addTo(g));
+  return g;
+}
+function drawCrime() { if(layers.crime) map.removeLayer(layers.crime); layers.crime = makeLayer([[41.593,-87.346,"Gary — Higher"],[41.583,-87.500,"Hammond — Higher"],[41.639,-87.454,"East Chicago — Higher"],[41.417,-87.365,"Crown Point — Lower"],[41.473,-87.068,"Valparaiso — Lower"]], '#ef4444', 8); layers.crime.addTo(map); }
+function drawFlood() { if(layers.flood) map.removeLayer(layers.flood); layers.flood = L.layerGroup(); L.polygon([[41.58,-87.52],[41.58,-87.22],[41.51,-87.22],[41.51,-87.52]], { color:'#60a5fa', fillOpacity:0.12 }).bindPopup('Northern flood influence').addTo(layers.flood); layers.flood.addTo(map); }
+function drawHospitals() { if(layers.hospitals) map.removeLayer(layers.hospitals); layers.hospitals = makeLayer([[41.55,-87.30,"Hospital"],[41.48,-87.33,"Hospital"],[41.46,-87.35,"Hospital"]], '#ef4444', 8); layers.hospitals.addTo(map); }
+function drawFuel() { if(layers.fuel) map.removeLayer(layers.fuel); layers.fuel = makeLayer([[41.50,-87.33,"Fuel/Grocery"],[41.47,-87.36,"Fuel/Grocery"]], '#fbbf24', 7); layers.fuel.addTo(map); }
+function drawEMS() { if(layers.ems) map.removeLayer(layers.ems); layers.ems = makeLayer([[41.49,-87.34,"Fire/EMS"],[41.54,-87.28,"Fire/EMS"]], '#60a5fa', 6); layers.ems.addTo(map); }
+function drawSurvival() { if(layers.survival) map.removeLayer(layers.survival); layers.survival = L.layerGroup(); L.polygon([[41.42,-87.40],[41.42,-87.28],[41.35,-87.28],[41.35,-87.40]], { color:'#4ade80', fillOpacity:0.16 }).bindPopup('Southern high ground').addTo(layers.survival); layers.survival.addTo(map); }
+function drawRoutes() { if(layers.routes) map.removeLayer(layers.routes); layers.routes = L.layerGroup(); L.polyline([[41.60,-87.45],[41.40,-87.45]], { color:'#34d399', weight:3 }).bindPopup('I-65').addTo(layers.routes); layers.routes.addTo(map); }
+function drawRings() { if(layers.rings) map.removeLayer(layers.rings); layers.rings = L.layerGroup(); const c = map.getCenter(); [5,10,15].forEach(mi => L.circle(c, { radius: mi*1609.34, color:'#94a3b8', weight:1, fillOpacity:0.02 }).bindPopup(mi+' mi').addTo(layers.rings)); layers.rings.addTo(map); }
+function setupToggles() {
+  const safe = (id, fn) => { const el = document.getElementById(id); if(el) el.onchange = fn; };
+  safe('fenceToggle', e => e.target.checked ? updateCountyLayer() : countyLayer && map.removeLayer(countyLayer));
+  safe('crimeToggle', e => e.target.checked ? drawCrime() : layers.crime && map.removeLayer(layers.crime));
+  safe('floodToggle', e => e.target.checked ? drawFlood() : layers.flood && map.removeLayer(layers.flood));
+  safe('hospitalsToggle', e => e.target.checked ? drawHospitals() : layers.hospitals && map.removeLayer(layers.hospitals));
+  safe('fuelToggle', e => e.target.checked ? drawFuel() : layers.fuel && map.removeLayer(layers.fuel));
+  safe('emsToggle', e => e.target.checked ? drawEMS() : layers.ems && map.removeLayer(layers.ems));
+  safe('survivalToggle', e => e.target.checked ? drawSurvival() : layers.survival && map.removeLayer(layers.survival));
+  safe('routesToggle', e => e.target.checked ? drawRoutes() : layers.routes && map.removeLayer(layers.routes));
+  safe('ringsToggle', e => e.target.checked ? drawRings() : layers.rings && map.removeLayer(layers.rings));
+}
+function applyPreset(type) {
+  ['crimeToggle','floodToggle','hospitalsToggle','fuelToggle','emsToggle','survivalToggle','routesToggle'].forEach(id => { const el = document.getElementById(id); if(el) el.checked = false; });
+  Object.values(layers).forEach(l => l && map.removeLayer(l));
+  let on = type === 'flood' ? ['floodToggle','survivalToggle','hospitalsToggle','emsToggle'] : type === 'weather' ? ['hospitalsToggle','fuelToggle','emsToggle'] : ['crimeToggle','hospitalsToggle','fuelToggle'];
+  on.forEach(id => { const el = document.getElementById(id); if(el) { el.checked = true; el.dispatchEvent(new Event('change')); } });
+}
+async function loadWeather() {
+  const c = counties[currentCounty];
+  try {
+    const headers = { 'User-Agent': 'NWIIntel/1.0', 'Accept': 'application/geo+json' };
+    const pts = await fetch('https://api.weather.gov/points/'+c.lat+','+c.lng, {headers}).then(r=>r.json());
+    const fc = await fetch(pts.properties.forecast, {headers}).then(r=>r.json());
+    const p = fc.properties.periods[0];
+    document.getElementById('temp').textContent = p.temperature + '°' + p.temperatureUnit;
+    document.getElementById('cond').textContent = p.shortForecast;
+    document.getElementById('aiBrief').innerHTML = '<b>'+c.name+'</b><br>'+p.temperature+'°'+p.temperatureUnit+', '+p.shortForecast;
+  } catch(e) { document.getElementById('cond').textContent = 'NWS unavailable'; }
+}
+function exportAreaStudy() {
+  const c = counties[currentCounty];
+  const html = '<html><head><title>Area Study — '+c.name+'</title></head><body style="font-family:system-ui;padding:32px;background:#111;color:#eee;"><h1>AREA STUDY — '+c.name.toUpperCase()+'</h1><p>Northwest Indiana corridor (Lake → Porter → LaPorte). Civilian adaptation of Special Forces Area Study structure. Public sources only.</p><h2>Orientation</h2><p>Population: '+c.pop+'. NRI: '+c.nri+'.</p><h2>Hazards</h2><p>Primary residual risks: northern flooding, severe weather, tornadoes. Crime higher in northern industrial cities.</p><h2>Recommendations</h2><p>Monitor NWS alerts. Know alternate routes. Use map layers for hospitals, fuel, and EMS.</p></body></html>';
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  m.innerHTML = '<div style="background:#1a2332;color:#e6edf3;max-width:700px;width:100%;max-height:85vh;overflow:auto;padding:24px;border-radius:10px;position:relative;"><button onclick="this.parentElement.parentElement.remove()" style="position:absolute;top:10px;right:10px;background:#4da6ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;">Close</button><div id="sc"></div></div>';
+  document.body.appendChild(m);
+  document.getElementById('sc').innerHTML = html;
+}
+let customLayer = L.layerGroup();
+function setupCustom() {
+  map.on('click', e => { const label = prompt('Label:') || 'Point'; const m = L.marker(e.latlng).bindPopup(label).addTo(customLayer); m.on('dblclick', () => customLayer.removeLayer(m)); });
+  customLayer.addTo(map);
+}
+function clearCustomMarkers() { customLayer.clearLayers(); }
+document.querySelectorAll('.county-tab').forEach(t => t.addEventListener('click', () => { document.querySelectorAll('.county-tab').forEach(x => x.classList.remove('active')); t.classList.add('active'); currentCounty = t.dataset.county; updateCountyLayer(); loadWeather(); }));
+document.getElementById('presetFlood').onclick = () => applyPreset('flood');
+document.getElementById('presetWeather').onclick = () => applyPreset('weather');
+document.getElementById('presetDaily').onclick = () => applyPreset('daily');
+document.getElementById('clearMarkersBtn').onclick = clearCustomMarkers;
+document.getElementById('mobileClearBtn').onclick = clearCustomMarkers;
+document.getElementById('mobileToggle').onclick = () => { const s = document.getElementById('sidebar'); const r = document.getElementById('rightPanel'); if(s.classList.contains('open')) { s.classList.remove('open'); r.classList.add('open'); } else if(r.classList.contains('open')) r.classList.remove('open'); else s.classList.add('open'); };
+function updateClock() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', timeZone:'America/Chicago'}) + ' CDT'; }
+setInterval(updateClock, 1000); updateClock();
+initMap(); loadWeather(); setupCustom();
+</script>
 </body>
 </html>
